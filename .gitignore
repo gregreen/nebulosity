@@ -1,0 +1,8 @@
+# Temporary files
+*.swp
+*.pyc
+
+# Images
+*.jpg
+*.jpeg
+*.png
