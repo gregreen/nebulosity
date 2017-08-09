@@ -1,0 +1,11 @@
+c4d_160317_052726_ooi_r_v1.fits.fz.16.8
+c4d_160317_052726_ooi_r_v1.fits.fz.17.12
+c4d_160324_020457_ooi_i_v1.fits.fz.19.30
+c4d_160325_002616_ooi_z_v1.fits.fz.9.29
+c4d_160314_051404_ooi_g_v1.fits.fz.46.3
+c4d_160314_051512_ooi_r_v1.fits.fz.51.9
+c4d_160314_051512_ooi_r_v1.fits.fz.50.23
+c4d_160314_051512_ooi_r_v1.fits.fz.55.7
+c4d_160314_051512_ooi_r_v1.fits.fz.56.8
+c4d_160314_051512_ooi_r_v1.fits.fz.56.12
+c4d_160315_004331_ooi_g_v1.fits.fz.41.23
