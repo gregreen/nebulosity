@@ -1,0 +1,174 @@
+\documentclass[12pt,twocolumn]{article}
+
+\usepackage{hyperref}	% Hyperlinks
+\hypersetup{colorlinks=true,linkcolor=blue,citecolor=blue,filecolor=blue,urlcolor=blue}
+
+\usepackage{graphicx}	% Including figure files
+\usepackage{amsmath}	% Advanced maths commands
+\usepackage{amssymb}	% Extra maths symbols
+\usepackage[compatibility=false]{caption}
+\usepackage{subcaption}
+\usepackage{cleveref}
+\usepackage{xspace}
+\usepackage[super]{nth}
+\usepackage{multirow}
+\usepackage{natbib}
+
+\crefname{table}{Table}{Tables}
+
+\usepackage{array}
+\makeatletter
+\newcommand{\thickhline}{%
+    \noalign {\ifnum 0=`}\fi \hrule height 1pt
+    \futurelet \reserved@a \@xhline
+}
+\newcolumntype{"}{@{\hskip\tabcolsep\vrule width 1pt\hskip\tabcolsep}}
+\makeatother
+
+
+\title{Nebulosity}
+\author{Gregory M. Green, Edward F. Schlafly}
+\date{24 August 2017}
+
+\begin{document}
+\maketitle
+
+The DECaPS pipeline attempts to explain all flux in images as coming from a smooth background (i.e., the sky) and stars. This fails badly in the presence of galaxies and nebulosity, which the pipeline attempts to shred into many stars. For the most part, it seems an adequate simplification to shred galaxies into stars in the DECaPS footprint: the vast majority of the sources \textit{are} stars, and both the algorithmic challenge and computational complexity of modeling galaxies is not justified. Nebulosity is more problematic. A small fraction ($\sim$0.1\%) of the footprint features substantial diffuse emission, primarily in the form of H$\alpha$, [O III], and scattered light from dust. This nebulosity can contain substantial fine structure that is not compatible with the DECaPS smooth sky model, leading the pipeline to try to explain the nebulosity as the sum of thousands of carefully distributed stars.
+
+Convolutional neural networks are ideally suited to the task of recognizing nebulosity in an image. In recent years, convolutional neural networks (CNNs) have found wide use in image, signal and natural language processing, among other fields (See \citealt{LeCun2015} for an accessible introduction). CNNs process input in a way that respects locality (e.g., nearby pixels in an image are more closely related than more distant pixels) and translation invariance (e.g., a given object might appear anywhere in an image). CNNs work by first identifying features on small scales (by sliding different convolutional filters across the input), and then connecting these features on ever larger scales to build up a rich representation of the input. In a typical classification problem, where one has labeled training data, one first defines the overall structure of the CNN (the number of layers in the network, the number of convolutional filters to include in each layer, etc.). Then, one feeds training data into the network, compares the network output with the desired answer, and uses backpropagation to vary the weights in the network so that the residuals are reduced. After many training epochs, the network ``learns'' the convolutional filter weights that minimize the classification errors. CNNs have proven remarkably successful in solving image- and signal-processing problems that humans can intuitively solve by eye or by ear (e.g., facial recognition, speech recognition, or identifying cats in images). A human with little to no prior knowledge can be quickly trained to identify nebulosity in astronomical images, making CNNs an obvious approach to solving this problem.
+
+% When given the task of learning to distinguish images with nebulosity from images with smooth sky backgrounds, we might expect a CNN to learn filters capable of distinguishing point sources from the types of structures that make up nebulosity (e.g., linear gradients)
+
+We trained a CNN to idenfity $512 \times 512$-pixel regions of images containing significant nebulosity. These regions were flagged, and putative stars in these regions were required to satisfy a sharpness criterion and be relatively uncontaminated by light from any nearby stars. This largely prevents the identification and deblending of blended stars in these regions, but this was seen as preferable to losing all stars in these regions in a sea of spurious sources attached to nebulosity in the region.
+
+In order to provide training and validation data for our network, we hand-classified $512 \times 512$-pixel images. We sorted the images into four categories:
+\begin{enumerate}
+    \itemsep0em
+    \item \texttt{NEBULOSITY} -- significant contamination by nebulosity.
+    \item \texttt{NEBULOSITY\_LIGHT} -- faint nebulosity.
+    \item \texttt{NORMAL} -- no contamination.
+    \item \texttt{SKY\_ERROR} -- spurious fluctuations in sky level injected by upstream DECam pipeline.
+\end{enumerate}
+We arrived at a dataset of 2000 images labeled \texttt{NORMAL}, 1775 images labeled \texttt{NEBULOSITY}, 1058 images labeled \texttt{NEBULOSITY\_LIGHT} and 629 images labeled \texttt{SKY\_ERROR}. We used 80\% of the images to train the network, and the remaining 20\% to validate the network. This is a relatively small number of training images with which to train a CNN. We therefore augmented our dataset by flipping the images vertically and horizontally, but did not perform other augmentation techniques (such as arbitrary rotation) that might alter the noise properties of the images or remove valuable information (e.g., the orientation of diffraction spikes). We histogram-normalized the images before feeding them to the neural network, which ensures that the sky background is always discernible.
+
+On the validation dataset, our trained network achieved 90\% completeness and 90\% purity in its \texttt{NEBULOSITY} classifications, with a vanishingly small percentage of \texttt{NORMAL} images being mis-classified as \texttt{NEBULOSITY}. Our final validation loss (a measure of the accuracy of the classifications) was similar to our training loss, indicating that our network does not suffer from over-fitting.
+
+We applied our trained convolutional neural network to each $512 \times 512$-pixel region of each survey image in order to flag areas with nebulosity. The neural network identified regions affected by significant nebulosity very accurately. A few corner cases were marked as nebulous, such as artifacts near extremely bright stars (brighter than \nth{6} mag), or ghosts associated with these stars. These regions are extremely rare, and from the perspective of the catalog, it is appropriate to flag them as nebulous anyway: the smooth sky plus stars modeling is likewise inadequate here.
+
+A more technical description of our CNN is provided in Appendix \ref{app:nebulosity-network-structure}.
+
+\appendix
+
+\section{Nebulosity Network Structure}
+\label{app:nebulosity-network-structure}
+
+Here, we describe the structure of our convolutional neural network in detail.
+
+Our convolutional neural network takes histogram-normalized $512 \times 512$-pixel images as input. The network consists of 14 convolutional layers, interspersed with 6 maximum pooling layers. A global average pooling layer reduces the activations of the last maximum pooling layer to 32 activations, each representing a different learned feature in the input image. These 32 features are finally fed into a two-layer dense neural network, which classifies each image as one of the following:
+\begin{enumerate}
+    \itemsep0em
+    \item \texttt{NEBULOSITY} -- significant contamination by nebulosity.
+    \item \texttt{NEBULOSITY\_LIGHT} -- faint nebulosity.
+    \item \texttt{NORMAL} -- no contamination.
+    \item \texttt{SKY\_ERROR} -- spurious fluctuations in sky level injected by upstream DECam pipeline.
+\end{enumerate}
+
+Each convolutional and dense layer is followed by a ReLU activation layer. We use categorical cross-entropy as our loss function. In all, our neural network has 75352 trainable parameters. In order to avoid over-fitting, we use L2 weight regularization in the convolutional layers and dropout in the dense layers.
+
+\cref{tab:network-architecture} summarizes our network architecture.
+
+\begin{table*}
+    \caption{Network architecture}
+    \label{tab:network-architecture}
+    \centering
+    \begin{tabular}{c " c | c}
+        layer & output shape & details \\
+        \thickhline
+        %
+        conv2d\_1 &
+        $512 \times 512 , \ 12$ &
+        $5 \times 5 , \, \mathrm{same \ padded}$ \\
+        %
+        maxpool2d\_1 &
+        $256 \times 256 , \ 12$ &
+        $2 \times 2$ \\ \hline
+        %
+        conv2d\_2 &
+        $256 \times 256 , \ 24$ &
+        $5 \times 5 , \, \mathrm{same \ padded}$ \\
+        %
+        maxpool2d\_2 &
+        $128 \times 128 , \ 24$ &
+        $2 \times 2$ \\ \hline
+        %
+        conv2d\_3 &
+        $128 \times 128 , \ 24$ &
+        $\begin{pmatrix}
+        3 \times 3 , \, \mathrm{same \ padded} \\
+        3 \times 3 , \, \mathrm{same \ padded} \\
+        1 \times 1 \hphantom{, \, \mathrm{same \ padded}}
+        \end{pmatrix}$ \\
+        %
+        maxpool2d\_3 &
+        $64 \times 64 , \ 24$ &
+        $2 \times 2$ \\ \hline
+        %
+        conv2d\_4 &
+        $64 \times 64 , \ 32$ &
+        $\begin{pmatrix}
+        3 \times 3 , \, \mathrm{same \ padded} \\
+        3 \times 3 , \, \mathrm{same \ padded} \\
+        1 \times 1 \hphantom{, \, \mathrm{same \ padded}}
+        \end{pmatrix}$ \\
+        %
+        maxpool2d\_4 &
+        $32 \times 32 , \, 32$ &
+        $2 \times 2$ \\ \hline
+        %
+        conv2d\_5 &
+        $32 \times 32, \ 32$ &
+        $\begin{pmatrix}
+        3 \times 3 , \, \mathrm{same \ padded} \\
+        3 \times 3 , \, \mathrm{same \ padded} \\
+        1 \times 1 \hphantom{, \, \mathrm{same \ padded}}
+        \end{pmatrix}$ \\
+        %
+        maxpool2d\_5 &
+        $16 \times 16 , \ 32$ &
+        $2 \times 2$ \\ \hline
+        %
+        conv2d\_6 &
+        $12 \times 12, \ 32$ &
+        $\begin{pmatrix}
+        3 \times 3 \\
+        3 \times 3 \\
+        1 \times 1
+        \end{pmatrix}$ \\
+        %
+        maxpool2d\_6 &
+        $6 \times 6 , \ 32$ &
+        $2 \times 2$ \\ \hline
+        %
+        global\_avg\_pool2d &
+        32 &
+        \\ \hline
+        %
+        dense\_1 &
+        12 &
+        20\% dropout \\
+        %
+        dense\_2 &
+        4 &
+        10\% dropout \\ \hline
+        %
+        softmax &
+        4 &
+    \end{tabular}
+    \\[10pt]
+    \caption*{All convolutional and dense layers use ReLU activation. The final output one-hot encodes the class, and the categorical cross-entropy loss function is used.}
+\end{table*}
+
+\bibliographystyle{plainnat}
+\bibliography{nebulosity_short}
+
+\end{document}
